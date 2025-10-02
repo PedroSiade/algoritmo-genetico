@@ -13,6 +13,13 @@ def calculate_distance(city_1: list[float], city_2: list[float]):
     return np.sqrt(dx**2 + dy**2)
 
 def group_cities(route: list, cities: np.ndarray) -> list[list]:
+    """
+    Esta função simula a visita às cidades seguindo a ordem da rota e agrupa-as por dias
+    de viagem. A cada passo, verifica se adicionar uma nova cidade não ultrapassa o limite
+    diário de distância, considerando também a distância de retorno à base.
+    
+    NOVA FUNCIONALIDADE: Tenta até 3 cidades diferentes antes de finalizar o dia.
+    """
     base_position = [0.0, 0.0]  # Posição da base (0,0)
     total_visits = []
     current_day_index = 0
@@ -20,17 +27,8 @@ def group_cities(route: list, cities: np.ndarray) -> list[list]:
 
     i = 0
     while i < len(route) and current_day_index < DAYS:
-        city_id_1 = route[i] 
-        city_id_2 = route[i+1] if i+1 < len(route) else route[0]
-        position_1 = cities[int(city_id_1),1:]
-        position_2 = cities[int(city_id_2),1:]
-        distance = calculate_distance(position_1, position_2)
-        
-        # LÓGICA CORRETA: Verificar se consegue voltar à base ANTES de ir para a nova cidade
-        # 1. Distância da base para a primeira cidade do dia
-        # 2. + distância entre cidades já visitadas no dia
-        # 3. + nova distância até a próxima cidade
-        # 4. + retorno à base da próxima cidade
+        city_id_1 = route[i]
+        position_1 = cities[int(city_id_1), 1:]
         
         # Calcula distância da base para a primeira cidade do dia
         first_city_pos = cities[int(daily_visits[0]), 1:]
@@ -43,19 +41,36 @@ def group_cities(route: list, cities: np.ndarray) -> list[list]:
             pos_j1 = cities[int(daily_visits[j+1]), 1:]
             day_distance += calculate_distance(pos_j, pos_j1)
         
-        # Adiciona a nova distância e o retorno à base
-        return_distance = calculate_distance(position_2, base_position)
-        total_day_distance = base_to_first + day_distance + distance + return_distance
+        # NOVA ESTRATÉGIA: Tenta até 3 cidades diferentes antes de finalizar o dia
+        city_added = False
+        max_attempts = min(3, len(route) - i - 1)
         
-        # Verifica se adicionar a próxima cidade não ultrapassa o limite diário
-        if total_day_distance <= MAX_DIST_DAY:
-            daily_visits.append(city_id_2)
-            i += 1
-        else:
+        for attempt in range(max_attempts):
+            if i + 1 + attempt >= len(route):
+                break
+                
+            city_id_2 = route[i + 1 + attempt]
+            position_2 = cities[int(city_id_2), 1:]
+            distance = calculate_distance(position_1, position_2)
+            
+            # Adiciona a nova distância e o retorno à base
+            return_distance = calculate_distance(position_2, base_position)
+            total_day_distance = base_to_first + day_distance + distance + return_distance
+            
+            # Verifica se adicionar esta cidade não ultrapassa o limite diário
+            if total_day_distance <= MAX_DIST_DAY:
+                daily_visits.append(city_id_2)
+                i += 1 + attempt
+                city_added = True
+                break
+        
+        # Se nenhuma cidade pôde ser adicionada, finaliza o dia
+        if not city_added:
             total_visits.append(daily_visits)
             current_day_index += 1
             daily_visits = [city_id_1]
             if current_day_index == DAYS: break
+            i += 1
     
     if len(daily_visits) > 1 and current_day_index < DAYS:
         total_visits.append(daily_visits)
@@ -63,25 +78,27 @@ def group_cities(route: list, cities: np.ndarray) -> list[list]:
     return total_visits
 
 def fitness_function(route: list, cities: np.ndarray) -> float:
+    """
+    Avalia a qualidade (fitness) de uma rota contando quantas cidades podem ser visitadas
+    respeitando o limite de distância diária e incluindo retorno obrigatório à base.
+    
+    NOVA FUNCIONALIDADE: Tenta até 3 cidades diferentes antes de finalizar o dia.
+    Também dá bônus para cidades novas para incentivar exploração de novas regiões.
+    """
     base_position = [0.0, 0.0]  # Posição da base (0,0)
     visited_cities = np.zeros(DAYS)
     current_day_index = 0
     daily_visits = 1
     daily_route = [route[0]]
+    
+    # Rastreia cidades únicas visitadas para dar bônus
+    unique_cities_visited = set([route[0]])
+    new_city_bonus = 0
 
     i = 0
     while i < len(route) and current_day_index < DAYS:
         city_id_1 = route[i]
-        city_id_2 = route[i+1] if i+1 < len(route) else route[0]
-        position_1 = cities[int(city_id_1),1:]
-        position_2 = cities[int(city_id_2),1:]
-        distance = calculate_distance(position_1, position_2)
-        
-        # LÓGICA CORRETA: Verificar se consegue voltar à base ANTES de ir para a nova cidade
-        # 1. Distância da base para a primeira cidade do dia
-        # 2. + distância entre cidades já visitadas no dia
-        # 3. + nova distância até a próxima cidade
-        # 4. + retorno à base da próxima cidade
+        position_1 = cities[int(city_id_1), 1:]
         
         # Calcula distância da base para a primeira cidade do dia
         first_city_pos = cities[int(daily_route[0]), 1:]
@@ -94,28 +111,54 @@ def fitness_function(route: list, cities: np.ndarray) -> float:
             pos_j1 = cities[int(daily_route[j+1]), 1:]
             day_distance += calculate_distance(pos_j, pos_j1)
         
-        # Adiciona a nova distância e o retorno à base
-        return_distance = calculate_distance(position_2, base_position)
-        total_day_distance = base_to_first + day_distance + distance + return_distance
+        # NOVA ESTRATÉGIA: Tenta até 3 cidades diferentes antes de finalizar o dia
+        city_added = False
+        max_attempts = min(3, len(route) - i - 1)
         
-        # Verifica se é possível visitar a próxima cidade no mesmo dia
-        if total_day_distance <= MAX_DIST_DAY:
-            daily_visits += 1
-            daily_route.append(city_id_2)
-            i += 1
-        else:
+        for attempt in range(max_attempts):
+            if i + 1 + attempt >= len(route):
+                break
+                
+            city_id_2 = route[i + 1 + attempt]
+            position_2 = cities[int(city_id_2), 1:]
+            distance = calculate_distance(position_1, position_2)
+            
+            # Adiciona a nova distância e o retorno à base
+            return_distance = calculate_distance(position_2, base_position)
+            total_day_distance = base_to_first + day_distance + distance + return_distance
+            
+            # Verifica se é possível visitar esta cidade no mesmo dia
+            if total_day_distance <= MAX_DIST_DAY:
+                daily_visits += 1
+                daily_route.append(city_id_2)
+                
+                # Verifica se é uma cidade nova e adiciona bônus
+                if city_id_2 not in unique_cities_visited:
+                    unique_cities_visited.add(city_id_2)
+                    new_city_bonus += 1  # Bônus alterado de 0.5 para 1
+                
+                i += 1 + attempt
+                city_added = True
+                break
+        
+        # Se nenhuma cidade pôde ser adicionada, finaliza o dia
+        if not city_added:
             visited_cities[current_day_index] = daily_visits
             current_day_index += 1
             daily_visits = 1
             daily_route = [city_id_1]
             if current_day_index == DAYS: break
+            i += 1
     
     if daily_visits > 1 and current_day_index < DAYS:
         visited_cities[current_day_index] = daily_visits
     
     total_visited_cities = np.sum(visited_cities)
     cities_proportion = total_visited_cities / len(route)
-    return total_visited_cities + (cities_proportion * 10)
+    
+    # Fitness inclui bônus para cidades novas
+    base_fitness = total_visited_cities + (cities_proportion * 10)
+    return base_fitness + new_city_bonus
 
 def initial_population(cities: np.ndarray, population_size: int) -> np.ndarray:
     city_ids = list(cities[:,0])
@@ -320,7 +363,7 @@ def genetic_algorithm(cities: np.ndarray,
     return best_route, mean_fitnesses, best_fitnesses
 
 def main():
-    cities_df = load_cities('../assets/cities.csv')
+    cities_df = load_cities('assets/cities.csv')
     cities = cities_df.to_numpy()
     
     print(f"Iniciando algoritmo genético para roteirização de {len(cities)} cidades em {DAYS} dias...")
@@ -329,10 +372,10 @@ def main():
 
     best_route, mean_fitnesses, best_fitnesses = genetic_algorithm(cities=cities,
                                                                    population_size=300,
-                                                                   generations=1000,
+                                                                   generations=600,
                                                                    mutation_rate=0.3,
                                                                    tournament_size=3,
-                                                                   elitism_rate=10)    
+                                                                   elitism_rate=2)    
     
     print("\nAlgoritmo genético concluído. Organizando resultados...")
     
