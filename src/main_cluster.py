@@ -4,219 +4,209 @@ import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 from plot_cities import load_cities, plot_paths
 
-DAYS = 5
-MAX_DIST_DAY = 40.0
+totalDias = 5
+distMax = 40.0
 
-def calculate_distance(city_1: list[float], city_2: list[float]):
-    dx = city_1[0] - city_2[0]
-    dy = city_1[1] - city_2[1]
-    return np.sqrt(dx**2 + dy**2)
+def calcularDistancia(cidadeUm, cidadeDois):
+    distanciaX = cidadeUm[0] - cidadeDois[0]  
+    distanciaY = cidadeUm[1] - cidadeDois[1] 
+
+    return np.sqrt(distanciaX**2 + distanciaY**2)
 
 def group_cities(route: list, cities: np.ndarray) -> list[list]:
-    """
-    Esta função simula a visita às cidades seguindo a ordem da rota e agrupa-as por dias
-    de viagem. A cada passo, verifica se adicionar uma nova cidade não ultrapassa o limite
-    diário de distância, considerando também a distância de retorno à base.
-    
-    NOVA FUNCIONALIDADE: Tenta até 3 cidades diferentes antes de finalizar o dia.
-    """
-    base_position = [0.0, 0.0]  # Posição da base (0,0)
-    total_visits = []
-    current_day_index = 0
-    daily_visits = [route[0]]
+    coordBase = [0.0, 0.0]  # Posição da base (0,0)
+    totalVisitas = []
+    idxDiaAtual = 0
+    visitasDia = [route[0]]
 
     i = 0
-    while i < len(route) and current_day_index < DAYS:
-        city_id_1 = route[i]
-        position_1 = cities[int(city_id_1), 1:]
+    while i < len(route) and idxDiaAtual < totalDias:
+        cidadeUm = route[i]
+        coordUm = cities[int(cidadeUm), 1:]
         
         # Calcula distância da base para a primeira cidade do dia
-        first_city_pos = cities[int(daily_visits[0]), 1:]
-        base_to_first = calculate_distance(base_position, first_city_pos)
+        cidadeFirst = cities[int(visitasDia[0]), 1:]
+        distFirstBase = calcularDistancia(coordBase, cidadeFirst)
         
         # Calcula distância entre cidades já visitadas no dia
-        day_distance = 0
-        for j in range(len(daily_visits) - 1):
-            pos_j = cities[int(daily_visits[j]), 1:]
-            pos_j1 = cities[int(daily_visits[j+1]), 1:]
-            day_distance += calculate_distance(pos_j, pos_j1)
+        distanciaDia = 0
+        for idx in range(len(visitasDia) - 1):
+            posicaoAtual = cities[int(visitasDia[idx]), 1:]
+            posicaoProxima = cities[int(visitasDia[idx + 1]), 1:]
+            distanciaDia += calcularDistancia(posicaoAtual, posicaoProxima)
         
-        # NOVA ESTRATÉGIA: Tenta até 3 cidades diferentes antes de finalizar o dia
-        city_added = False
-        max_attempts = min(3, len(route) - i - 1)
+        # Tenta até 3 cidades diferentes antes de finalizar o dia
+        cidadeAdd = False
+        tentativas = min(3, len(route) - i - 1)
         
-        for attempt in range(max_attempts):
-            if i + 1 + attempt >= len(route):
+        for tentativa in range(tentativas):
+            if i + 1 + tentativa >= len(route):
                 break
                 
-            city_id_2 = route[i + 1 + attempt]
-            position_2 = cities[int(city_id_2), 1:]
-            distance = calculate_distance(position_1, position_2)
+            cidadeDois = route[i + 1 + tentativa]
+            coordDois = cities[int(cidadeDois), 1:]
+            distancia = calcularDistancia(coordUm, coordDois)
             
             # Adiciona a nova distância e o retorno à base
-            return_distance = calculate_distance(position_2, base_position)
-            total_day_distance = base_to_first + day_distance + distance + return_distance
+            distanciaBase = calcularDistancia(coordDois, coordBase)
+            distanciaDiaTotal = distFirstBase + distanciaDia + distancia + distanciaBase
             
             # Verifica se adicionar esta cidade não ultrapassa o limite diário
-            if total_day_distance <= MAX_DIST_DAY:
-                daily_visits.append(city_id_2)
-                i += 1 + attempt
-                city_added = True
+            if distanciaDiaTotal <= distMax:
+                visitasDia.append(cidadeDois)
+                i += 1 + tentativa
+                cidadeAdd = True
                 break
         
         # Se nenhuma cidade pôde ser adicionada, finaliza o dia
-        if not city_added:
-            total_visits.append(daily_visits)
-            current_day_index += 1
-            daily_visits = [city_id_1]
-            if current_day_index == DAYS: break
+        if not cidadeAdd:
+            totalVisitas.append(visitasDia)
+            idxDiaAtual += 1
+            visitasDia = [cidadeUm]
+            if idxDiaAtual == totalDias: break
             i += 1
     
-    if len(daily_visits) > 1 and current_day_index < DAYS:
-        total_visits.append(daily_visits)
+    if len(visitasDia) > 1 and idxDiaAtual < totalDias:
+        totalVisitas.append(visitasDia)
     
-    return total_visits
+    return totalVisitas
 
-def fitness_function(route: list, cities: np.ndarray) -> float:
-    """
-    Avalia a qualidade (fitness) de uma rota contando quantas cidades podem ser visitadas
-    respeitando o limite de distância diária e incluindo retorno obrigatório à base.
-    
-    NOVA FUNCIONALIDADE: Tenta até 3 cidades diferentes antes de finalizar o dia.
-    Também dá bônus para cidades novas para incentivar exploração de novas regiões.
-    """
-    base_position = [0.0, 0.0]  # Posição da base (0,0)
-    visited_cities = np.zeros(DAYS)
-    current_day_index = 0
-    daily_visits = 1
-    daily_route = [route[0]]
+def fitnessFunction(rota, tabelaCidades):
+    coordBase = [0.0, 0.0]  # Posição da Base (0,0)
+
+    qtdCidadesVisitadas = np.zeros(totalDias)  # Número de cidades visitadas em cada dia
+    idxDiaAtual = 0      # Índice do dia atual
+    visitasDia = 1       # Contador de visitas (começa com 1 para a primeira cidade)
+    rotaDia = [rota[0]]  # Cidades visitadas no dia atual
     
     # Rastreia cidades únicas visitadas para dar bônus
-    unique_cities_visited = set([route[0]])
-    new_city_bonus = 0
+    listaCidadesVisitadas = set([rota[0]])  # Conjunto de cidades únicas visitadas
+    bonusCidadesNovas = 0                   # Bônus acumulado por cidades novas
 
-    i = 0
-    while i < len(route) and current_day_index < DAYS:
-        city_id_1 = route[i]
-        position_1 = cities[int(city_id_1), 1:]
+    i = 0  # Índice para percorrer a rota
+
+    while i < len(rota) and idxDiaAtual < totalDias:
+        cidadeUm = rota[i]  # ID da cidade atual
+        coordUm = tabelaCidades[int(cidadeUm), 1:]
         
         # Calcula distância da base para a primeira cidade do dia
-        first_city_pos = cities[int(daily_route[0]), 1:]
-        base_to_first = calculate_distance(base_position, first_city_pos)
+        cidadeFirst = tabelaCidades[int(rotaDia[0]), 1:]
+        distFirstBase = calcularDistancia(coordBase, cidadeFirst)
         
         # Calcula distância entre cidades já visitadas no dia
-        day_distance = 0
-        for j in range(len(daily_route) - 1):
-            pos_j = cities[int(daily_route[j]), 1:]
-            pos_j1 = cities[int(daily_route[j+1]), 1:]
-            day_distance += calculate_distance(pos_j, pos_j1)
+        distanciaDia = 0
+        for idx in range(len(rotaDia) - 1):
+            posicaoAtual = tabelaCidades[int(rotaDia[idx]), 1:]
+            posicaoProxima = tabelaCidades[int(rotaDia[idx + 1]), 1:]
+            distanciaDia += calcularDistancia(posicaoAtual, posicaoProxima)
         
-        # NOVA ESTRATÉGIA: Tenta até 3 cidades diferentes antes de finalizar o dia
-        city_added = False
-        max_attempts = min(3, len(route) - i - 1)
+        cidadeAdd = False
+        tentativas = min(3, len(rota) - i - 1)  # Máximo de 3 tentativas ou até o fim da rota
         
-        for attempt in range(max_attempts):
-            if i + 1 + attempt >= len(route):
+        for tentativa in range(tentativas):
+            if i + 1 + tentativa >= len(rota):
                 break
                 
-            city_id_2 = route[i + 1 + attempt]
-            position_2 = cities[int(city_id_2), 1:]
-            distance = calculate_distance(position_1, position_2)
+            cidadeDois = rota[i + 1 + tentativa]  # ID da cidade candidata
+            coordDois = tabelaCidades[int(cidadeDois), 1:]  # Coordenadas da cidade candidata
+            distancia = calcularDistancia(coordUm, coordDois)  # Distância até a cidade candidata
             
             # Adiciona a nova distância e o retorno à base
-            return_distance = calculate_distance(position_2, base_position)
-            total_day_distance = base_to_first + day_distance + distance + return_distance
+            distanciaBase = calcularDistancia(coordDois, coordBase)
+            distanciaDiaTotal = distFirstBase + distanciaDia + distancia + distanciaBase
             
             # Verifica se é possível visitar esta cidade no mesmo dia
-            if total_day_distance <= MAX_DIST_DAY:
-                daily_visits += 1
-                daily_route.append(city_id_2)
+            if distanciaDiaTotal <= distMax:
+                visitasDia += 1 
+                rotaDia.append(cidadeDois)  # Adiciona cidade à rota do dia
                 
                 # Verifica se é uma cidade nova e adiciona bônus
-                if city_id_2 not in unique_cities_visited:
-                    unique_cities_visited.add(city_id_2)
-                    new_city_bonus += 1  # Bônus alterado de 0.5 para 1
+                if cidadeDois not in listaCidadesVisitadas:
+                    listaCidadesVisitadas.add(cidadeDois)
+                    bonusCidadesNovas += 1  # Bônus para cidades novas
                 
-                i += 1 + attempt
-                city_added = True
+                i += 1 + tentativa  # Avança para a próxima cidade (pula as tentativas)
+                cidadeAdd = True
                 break
         
         # Se nenhuma cidade pôde ser adicionada, finaliza o dia
-        if not city_added:
-            visited_cities[current_day_index] = daily_visits
-            current_day_index += 1
-            daily_visits = 1
-            daily_route = [city_id_1]
-            if current_day_index == DAYS: break
-            i += 1
-    
-    if daily_visits > 1 and current_day_index < DAYS:
-        visited_cities[current_day_index] = daily_visits
-    
-    total_visited_cities = np.sum(visited_cities)
-    cities_proportion = total_visited_cities / len(route)
-    
-    # Fitness inclui bônus para cidades novas
-    base_fitness = total_visited_cities + (cities_proportion * 10)
-    return base_fitness + new_city_bonus
+        if not cidadeAdd:
+            qtdCidadesVisitadas[idxDiaAtual] = visitasDia  # Registra número de visitas do dia
+            idxDiaAtual += 1                               # Avança para o próximo dia
+            visitasDia = 1                                 # Reinicia contador
+            rotaDia = [cidadeUm]                           # Reinicia rota do dia com a cidade atual
 
-def initial_population(cities: np.ndarray, population_size: int) -> np.ndarray:
-    city_ids = list(cities[:,0])
-    
-    return [random.sample(city_ids, len(city_ids)) for _ in range(population_size)]
+            if idxDiaAtual == totalDias:
+                break  
 
-def select_parents(fitnessess: np.ndarray,
-                   tournament_size: int = 3,
-                   selected_size: int = 10) -> list[list]:
-    selected = []
+            i += 1 
+    
+    # Adiciona a pontuação do último dia (que pode estar incompleto)
+    if visitasDia > 1 and idxDiaAtual < totalDias:
+        qtdCidadesVisitadas[idxDiaAtual] = visitasDia
+
+    # Fitness Total: soma das cidades visitadas + bônus por proporção + bônus por cidades novas
+    qtdCidadesVisitadasTotal = np.sum(qtdCidadesVisitadas)     # Total de cidades visitadas
+    bonusProporcao = qtdCidadesVisitadasTotal / len(rota)      # Proporção de cidades visitadas
+    
+    fitness = qtdCidadesVisitadasTotal + (bonusProporcao * 10) # Fitness base
+
+    return fitness + bonusCidadesNovas                         # Adiciona bônus por cidades novas
+
+def criarPop(tabelaCidades, tamanhoPop):
+    cidadesID = list(tabelaCidades[:, 0])  # Extrai os IDs das cidades da matriz
+    
+    return [random.sample(cidadesID, len(cidadesID)) for _ in range(tamanhoPop)]
+
+def escolherPais(fitnessess, tamanhoTorneio, selected_size):
+
+    selecionados = []  # Lista para armazenar os pais selecionados
     
     for _ in range(selected_size):
-        tournament = random.sample(fitnessess, tournament_size)
-        winner = max(tournament, key=lambda x: x[1])[0]
-        selected.append(winner)
+        torneio = random.sample(fitnessess, tamanhoTorneio)  # Seleciona rotas aleatórias para o torneio
+        winner = max(torneio, key=lambda x: x[1])[0]         # Escolhe a rota com maior fitness como vencedora
+        selecionados.append(winner)
     
-    return selected
+    return selecionados
 
-def crossover(parent_1: list, parent_2: list) -> list:
-    size = len(parent_1)
+def crossover(paiUm, paiDois):
+    size = len(paiUm)  # Tamanho da rota (número de cidades)
+    
+    # Seleciona dois pontos aleatórios para definir o segmento a ser copiado do primeiro pai
     start, end = sorted(random.sample(range(size), 2))
-    child = [None] * size
-    child[start:end] = parent_1[start:end]
-    remaining = [city for city in parent_2 if city not in child]
-    child = [city if city is not None else remaining.pop(0) for city in child]
     
-    return child
+    # Inicializa o filho como uma lista de valores nulos
+    filho = [None] * size
+    
+    # Passo 1: Copia o segmento do primeiro pai para o filho
+    filho[start:end] = paiUm[start:end]
+    
+    # Passo 2: Identifica as cidades que não foram copiadas do primeiro pai
+    resto = [cidade for cidade in paiDois if cidade not in filho]
+    
+    # Passo 3: Preenche as posições vazias com as cidades restantes, na ordem do segundo pai
+    filho = [cidade if cidade is not None else resto.pop(0) for cidade in filho]
+    
+    return filho
 
-def adaptive_mutation_rate(generation: int, total_generations: int, initial_rate: float = 0.3, final_rate: float = 0.3) -> float:
-    """
-    Calcula a taxa de mutação adaptativa que diminui ao longo das gerações
-    
-    Esta função implementa uma mutação adaptativa que começa com uma taxa alta
-    para explorar o espaço de busca e gradualmente diminui para refinar soluções
-    nas gerações finais.
-    
-    Parâmetros:
-    - generation: geração atual (0 a total_generations-1)
-    - total_generations: número total de gerações
-    - initial_rate: taxa de mutação inicial (padrão: 0.3)
-    - final_rate: taxa de mutação final (padrão: 0.01)
-    
-    Retorno:
-    - taxa de mutação para a geração atual
-    """
-    # Progressão linear da taxa de mutação
-    progress = generation / (total_generations - 1)  # 0.0 a 1.0
-    current_rate = initial_rate - (initial_rate - final_rate) * progress
+def taxaMutacaoAdaptativa(geracao, geracoes, taxaInicial, taxaFinal):
+    # Progressão Linear da taxa de mutação
+    progressao = geracao / (geracoes - 1)  # 0.0 a 1.0
+    taxaAtual = taxaInicial - (taxaInicial - taxaFinal) * progressao
     
     # Garante que a taxa não seja negativa
-    return max(current_rate, final_rate)
+    return max(taxaAtual, taxaFinal)
 
-def mutation(route: list, mutation_rate: float) -> list:
-    if random.random() < mutation_rate:
-        idx1, idx2 = random.sample(range(len(route)), 2)
-        route[idx1], route[idx2] = route[idx2], route[idx1]
+def mutacao(rota, taxaMutacao):
+    # Determina aleatoriamente se ocorrerá mutação baseado na taxa fornecida
+    if random.random() < taxaMutacao:
+        # Seleciona aleatoriamente duas posições diferentes na rota
+        idx1, idx2 = random.sample(range(len(rota)), 2)
+        
+        # Troca as cidades nas posições selecionadas
+        rota[idx1], rota[idx2] = rota[idx2], rota[idx1]
     
-    return route
+    return rota
 
 
 
@@ -225,45 +215,45 @@ def optimize_route_2opt_constrained(route, cities):
     Otimização 2-opt que respeita restrições de distância diária e retorno à base.
     Usa fitness function como critério de otimização em vez de distância total.
     """
-    improved = True
-    best_route = route.copy()
-    best_fitness = fitness_function(best_route, cities)
+    melhorou = True
+    melhorRota = route.copy()
+    melhorFitness = fitnessFunction(melhorRota, cities)
   
-    while improved:
-        improved = False
+    while melhorou:
+        melhorou = False
       
         for i in range(1, len(route) - 2):
             for j in range(i + 1, len(route)):
                 if j - i == 1: continue
         
-                new_route = two_opt_swap(best_route, i, j)
-                new_fitness = fitness_function(new_route, cities)
+                novaRota = two_opt_swap(melhorRota, i, j)
+                novoFitness = fitnessFunction(novaRota, cities)
                 
                 # Só aceita se melhorar o fitness (que já considera todas as restrições)
-                if new_fitness > best_fitness:
-                    best_fitness = new_fitness
-                    best_route = new_route
-                    improved = True
+                if novoFitness > melhorFitness:
+                    melhorFitness = novoFitness
+                    melhorRota = novaRota
+                    melhorou = True
     
-    return best_route
+    return melhorRota
 
 def two_opt_swap(route, i, j):
-    new_route = route.copy()
-    new_route[i:j+1] = reversed(route[i:j+1])
+    novaRota = route.copy()
+    novaRota[i:j+1] = reversed(route[i:j+1])
     
-    return new_route
+    return novaRota
 
-def calculate_total_distance(route, cities):
+def calcularDistanciaTotal(route, cities):
     total = 0
     
     for i in range(len(route) - 1):
-        city1 = cities[int(route[i]), 1:]
-        city2 = cities[int(route[i+1]), 1:]
-        total += calculate_distance(city1, city2)
+        cidade1 = cities[int(route[i]), 1:]
+        cidade2 = cities[int(route[i+1]), 1:]
+        total += calcularDistancia(cidade1, cidade2)
     
     return total
 
-def simple_clustering(cities, num_clusters = DAYS):
+def simple_clustering(cities, num_clusters = totalDias):
     coords = cities[:, 1:]
     city_ids = cities[:, 0].astype(int)
     n_cities = len(cities)
@@ -276,7 +266,7 @@ def simple_clustering(cities, num_clusters = DAYS):
     max_iterations = 20
     for _ in range(max_iterations):
         for i in range(n_cities):
-            distances = [calculate_distance(coords[i], centroid) for centroid in centroids]
+            distances = [calcularDistancia(coords[i], centroid) for centroid in centroids]
             clusters[i] = np.argmin(distances)
         
         new_centroids = np.zeros((num_clusters, 2))
@@ -299,115 +289,120 @@ def simple_clustering(cities, num_clusters = DAYS):
     
     return clustered_cities
 
-def genetic_algorithm(cities: np.ndarray,
-                      population_size: int,
-                      generations: int,
-                      mutation_rate: float,
-                      tournament_size: int,
-                      elitism_rate: int):
+def algoritmoGenetico(cities,
+                      tamanhoPop,
+                      geracoes,
+                      taxaMutacao,
+                      tamanhoTorneio,
+                      tamanhoElitismo):
     clustered_cities = simple_clustering(cities)
-    routes = initial_population(cities, population_size - 1)
-    fitnessess: list[tuple[np.ndarray, float]] = [(route, fitness_function(route, cities)) for route in routes]
+    pop = criarPop(cities, tamanhoPop - 1)
+    fitnessess: list[tuple[np.ndarray, float]] = [(rota, fitnessFunction(rota, cities)) for rota in pop]
 
-    routes.append(clustered_cities)
+    pop.append(clustered_cities)
     
-    mean_fitnesses = []
-    best_fitnesses = []
+    melhoresFitnesses = []
+    mediasFitnesses = []
 
-    best_route, best_fitness = sorted(fitnessess, key=lambda x: x[1], reverse=True)[0]
-    mean_fitness = sum(fit[1] for fit in fitnessess)/len(fitnessess)
+    melhorRota, melhorRotaFitness = max(fitnessess, key=lambda x: x[1])
+    mediaRotaFitness = sum(fit[1] for fit in fitnessess)/len(fitnessess)
 
-    best_fitnesses.append(best_fitness)
-    mean_fitnesses.append(mean_fitness)
+    melhoresFitnesses.append(melhorRotaFitness)
+    mediasFitnesses.append(mediaRotaFitness)
   
-    for i in range(generations):
+    for geracao in range(geracoes):
         # Calcula taxa de mutação adaptativa para esta geração
-        current_mutation_rate = adaptive_mutation_rate(i, generations, mutation_rate, 0.01)
+        taxaMutacaoAtual = taxaMutacaoAdaptativa(geracao, geracoes, taxaMutacao, 0.01)
         
-        selected_parents = select_parents(fitnessess, tournament_size, elitism_rate)
-        new_population = selected_parents[:]
+        paisEscolhidos = escolherPais(fitnessess, tamanhoTorneio, tamanhoElitismo)
+        novaPop = paisEscolhidos[:]
       
-        while len(new_population) < population_size:
-            parent_1, parent_2 = random.sample(selected_parents, 2)
-            child = crossover(parent_1, parent_2)
-            child = mutation(child, current_mutation_rate)
-            new_population.append(child)
+        while len(novaPop) < tamanhoPop:
+            paiUm, paiDois = random.sample(paisEscolhidos, 2)
+            filho = crossover(paiUm, paiDois)
+            filho = mutacao(filho, taxaMutacaoAtual)
+            novaPop.append(filho)
       
         # Otimização 2-opt com restrições aplicada a cada 10 gerações
-        if i % 10 == 0 and best_route is not None:
-            optimized_route = optimize_route_2opt_constrained(best_route, cities)
-            new_population.append(optimized_route)
-            if len(new_population) > population_size:
-                idx_to_remove = random.randint(0, len(new_population) - 2)
-                new_population.pop(idx_to_remove)
+        if geracao % 10 == 0 and melhorRota is not None:
+            rotaOtimizada = optimize_route_2opt_constrained(melhorRota, cities)
+            novaPop.append(rotaOtimizada)
+            if len(novaPop) > tamanhoPop:
+                idxToRemove = random.randint(0, len(novaPop) - 2)
+                novaPop.pop(idxToRemove)
       
-        new_fitnessess = [(route, fitness_function(route, cities)) for route in new_population]
+        novosFitnessess = [(rota, fitnessFunction(rota, cities)) for rota in novaPop]
         
-        new_best_route, new_best_fitness = sorted(fitnessess, key=lambda x: x[1], reverse=True)[0]
-        new_mean_fitness = sum(fit[1] for fit in fitnessess)/len(fitnessess)
+        novaMelhorRota, novoMelhorFitness = max(novosFitnessess, key=lambda x: x[1])
+        novaMediaFitness = sum(fit[1] for fit in novosFitnessess)/len(novosFitnessess)
 
-        best_fitnesses.append(new_best_fitness)
-        mean_fitnesses.append(new_mean_fitness)
+        melhoresFitnesses.append(novoMelhorFitness)
+        mediasFitnesses.append(novaMediaFitness)
 
-        if new_best_fitness > best_fitness:
-            best_fitness = new_best_fitness
-            best_route = new_best_route
+        if novoMelhorFitness > melhorRotaFitness:
+            melhorRotaFitness = novoMelhorFitness
+            melhorRota = novaMelhorRota
         
-        routes = new_population
-        fitnessess = new_fitnessess
+        pop = novaPop
+        fitnessess = novosFitnessess
       
     # Aplicação final da otimização 2-opt com restrições
-    if best_route is not None:
-        best_route = optimize_route_2opt_constrained(best_route, cities)
+    if melhorRota is not None:
+        melhorRota = optimize_route_2opt_constrained(melhorRota, cities)
     
-    return best_route, mean_fitnesses, best_fitnesses
+    return melhorRota, mediasFitnesses, melhoresFitnesses
 
 def main():
+    # Carrega dados das cidades a partir do arquivo CSV
     cities_df = load_cities('assets/cities.csv')
     cities = cities_df.to_numpy()
     
-    print(f"Iniciando algoritmo genético para roteirização de {len(cities)} cidades em {DAYS} dias...")
-    print(f"Distância máxima por dia: {MAX_DIST_DAY} unidades")
-    print(f"Mutacao adaptativa: 0.3 -> 0.01 ao longo das gerações\n")
+    print(f"Iniciando algoritmo genético para roteirização de {len(cities)} cidades em {totalDias} dias...")
+    print(f"Distância máxima por dia: {distMax} unidades")
+    print(f"Mutação adaptativa: 0.3 -> 0.01 ao longo das gerações\n")
 
-    best_route, mean_fitnesses, best_fitnesses = genetic_algorithm(cities=cities,
-                                                                   population_size=300,
-                                                                   generations=600,
-                                                                   mutation_rate=0.3,
-                                                                   tournament_size=3,
-                                                                   elitism_rate=2)    
+    # Executa o algoritmo genético com parâmetros definidos
+    melhorRota, mediaFitnesses, melhorFitnesses = algoritmoGenetico(cities=cities,
+                                                                   tamanhoPop=300,
+                                                                   geracoes=600,
+                                                                   taxaMutacao=0.3,
+                                                                   tamanhoTorneio=3,
+                                                                   tamanhoElitismo=2)    
     
     print("\nAlgoritmo genético concluído. Organizando resultados...")
     
-    best_route_grouped = group_cities(best_route, cities)
-    flattened_best_route_grouped = [city for day in best_route_grouped for city in day]
+    # Agrupa as cidades da melhor rota por dias de viagem
+    melhorRotaAgrupada = group_cities(melhorRota, cities)
+    melhorRotaAchatada = [city for day in melhorRotaAgrupada for city in day]  # Achata a lista de cidades visitadas
 
-    total_cities_raw = len(flattened_best_route_grouped)
-    unique_cities_count = len(np.unique(flattened_best_route_grouped))
+    totalCidades = len(melhorRotaAchatada)                  # Total de cidades visitadas (com repetições)
+    totalCidadesUnicas = len(np.unique(melhorRotaAchatada)) # Total de cidades únicas visitadas
 
     print("\n=== ESTATÍSTICAS DAS GERAÇÕES ===")
-    generation_table = PrettyTable()
-    generation_table.field_names = ["Geração", "Melhor fitness", "Fitness médio"]
-    generation_table.add_rows([[i+1, mean_fitnesses[i], best_fitnesses[i]] for i in range(len(mean_fitnesses))])
-    print(generation_table)
+    tabelaGeracoes = PrettyTable()  # Cria uma tabela para exibir estatísticas das gerações
+    tabelaGeracoes.field_names = ["Geração", "Melhor fitness", "Fitness médio"]
+    tabelaGeracoes.add_rows([[i+1, mediaFitnesses[i], melhorFitnesses[i]] for i in range(len(mediaFitnesses))])
+    print(tabelaGeracoes)
 
-    plt.plot(best_fitnesses)
-    plt.plot(mean_fitnesses)
+    # Plota as estatísticas de fitness
+    plt.plot(melhorFitnesses)
+    plt.plot(mediaFitnesses)
     plt.legend(['Melhor fitness', 'Fitness médio'])
     
     print("\n=== ESTATÍSTICAS DA SOLUÇÃO ===")
-    print(f"Total de cidades visitadas (com repetições): {total_cities_raw}")
+    print(f"Total de cidades visitadas (com repetições): {totalCidades}")
     print(f"(Essas repetições ocorrem, pois são contabilizadas as mesmas cidades visitadas em dias diferentes: cidade final e cidade inicial de um dia)")
-    print(f"Total de cidades únicas visitadas: {unique_cities_count} de {len(cities)}")
-    print(f"Porcentagem de cobertura: {unique_cities_count/len(cities)*100:.2f}%")
+    print(f"Total de cidades únicas visitadas: {totalCidadesUnicas} de {len(cities)}")
+    print(f"Porcentagem de cobertura: {totalCidadesUnicas/len(cities)*100:.2f}%")
     
     print("\n=== DETALHAMENTO POR DIA ===")
-    day_table = PrettyTable()
-    day_table.field_names = ["Dia", "Quantidade total", "Quantidade única", "Cidades"]
-    day_table.add_rows([[i+1, len(day), len(day)-1 if i > 0 else len(day), np.array(day)] for i, day in enumerate(best_route_grouped)])
-    print(day_table)
+    tabelaDias = PrettyTable()  # Cria uma tabela para exibir detalhes por dia
+    tabelaDias.field_names = ["Dia", "Quantidade total", "Quantidade única", "Cidades"]
+    tabelaDias.add_rows([[i+1, len(dia), len(dia)-1 if i > 0 else len(dia), np.array(dia)] for i, dia in enumerate(melhorRotaAgrupada)])
+    print(tabelaDias)
     
-    plot_paths(cities_df, best_route_grouped, return_to_base=True, base_coords=(0.0, 0.0))
+    # Visualiza a rota encontrada
+    plot_paths(cities_df, melhorRotaAgrupada, return_to_base=True, base_coords=(0.0, 0.0))
     
     print("\nProcesso concluído.")
 
