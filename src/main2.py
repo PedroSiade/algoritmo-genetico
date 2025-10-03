@@ -396,9 +396,8 @@ def main():
     plt.legend(['Melhor fitness', 'Fitness médio'])
     
     print("\n=== ESTATÍSTICAS DA SOLUÇÃO ===")
-    print(f"Total de cidades visitadas (com repetições): {total_cities_raw}")
+    print(f"Total de cidades visitadas: {total_cities_raw}")
     print(f"(Essas repetições ocorrem, pois são contabilizadas as mesmas cidades visitadas em dias diferentes: cidade final e cidade inicial de um dia)")
-    print(f"Total de cidades únicas visitadas: {unique_cities_count} de {len(cities)}")
     print(f"Porcentagem de cobertura: {unique_cities_count/len(cities)*100:.2f}%")
     
     print("\n=== DETALHAMENTO POR DIA ===")
