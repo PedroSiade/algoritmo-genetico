@@ -44,17 +44,11 @@ def agruparCidades(rota, cities):
             posicaoProxima = cities[int(visitasDia[idx + 1]), 1:]
             distanciaDia += calcularDistancia(posicaoAtual, posicaoProxima)
         
-        # NOVA ESTRATÉGIA: Tenta até 3 cidades diferentes antes de finalizar o dia
-        cidadeAdd = False
-        tentativas = min(3, len(rota) - i - 1)  # Máximo 3 tentativas ou até o fim da rota
-        
-        for tentativa in range(tentativas):
-            if i + 1 + tentativa >= len(rota):
-                break
-                
-            cidadeDois = rota[i + 1 + tentativa]  # ID da cidade candidata
-            coordDois = cities[int(cidadeDois), 1:]  # Coordenadas da cidade candidata
-            distancia = calcularDistancia(coordUm, coordDois)  # Distância até a cidade candidata
+        # Verifica se a próxima cidade pode ser adicionada ao dia
+        if i + 1 < len(rota):
+            cidadeDois = rota[i + 1]  # ID da próxima cidade
+            coordDois = cities[int(cidadeDois), 1:]  # Coordenadas da próxima cidade
+            distancia = calcularDistancia(coordUm, coordDois)  # Distância até a próxima cidade
             
             # Adiciona a nova distância e o retorno à base
             distanciaBase = calcularDistancia(coordDois, coordBase)
@@ -63,12 +57,16 @@ def agruparCidades(rota, cities):
             # Verifica se adicionar esta cidade não ultrapassa o limite diário
             if distanciaDiaTotal <= distMax:
                 visitasDia.append(cidadeDois)  # Adiciona cidade ao dia atual
-                i += 1 + tentativa  # Avança para a próxima cidade (pula as tentativas)
-                cidadeAdd = True
-                break
-        
-        # Se nenhuma cidade pôde ser adicionada, finaliza o dia
-        if not cidadeAdd:
+                i += 1  # Avança para a próxima cidade
+            else:
+                # Se a próxima cidade não cabe, finaliza o dia
+                totalVisitas.append(visitasDia)  # Adiciona as visitas do dia à lista total
+                idxDiaAtual += 1  # Avança para o próximo dia
+                visitasDia = [cidadeUm]  # Inicializa o próximo dia com a cidade atual
+                if idxDiaAtual == totalDias: break  # Encerra se acabaram os dias
+                i += 1  # Avança para a próxima cidade na rota
+        else:
+            # Se não há mais cidades na rota, finaliza o dia
             totalVisitas.append(visitasDia)  # Adiciona as visitas do dia à lista total
             idxDiaAtual += 1  # Avança para o próximo dia
             visitasDia = [cidadeUm]  # Inicializa o próximo dia com a cidade atual
@@ -110,16 +108,11 @@ def fitnessFunction(rota, tabelaCidades):
             posicaoProxima = tabelaCidades[int(rotaDia[idx + 1]), 1:]
             distanciaDia += calcularDistancia(posicaoAtual, posicaoProxima)
         
-        cidadeAdd = False
-        tentativas = min(3, len(rota) - i - 1)  # Máximo de 3 tentativas ou até o fim da rota
-        
-        for tentativa in range(tentativas):
-            if i + 1 + tentativa >= len(rota):
-                break
-                
-            cidadeDois = rota[i + 1 + tentativa]  # ID da cidade candidata
-            coordDois = tabelaCidades[int(cidadeDois), 1:]  # Coordenadas da cidade candidata
-            distancia = calcularDistancia(coordUm, coordDois)  # Distância até a cidade candidata
+        # Verifica se a próxima cidade pode ser adicionada ao dia
+        if i + 1 < len(rota):
+            cidadeDois = rota[i + 1]  # ID da próxima cidade
+            coordDois = tabelaCidades[int(cidadeDois), 1:]  # Coordenadas da próxima cidade
+            distancia = calcularDistancia(coordUm, coordDois)  # Distância até a próxima cidade
             
             # Adiciona a nova distância e o retorno à base
             distanciaBase = calcularDistancia(coordDois, coordBase)
@@ -135,12 +128,20 @@ def fitnessFunction(rota, tabelaCidades):
                     listaCidadesVisitadas.add(cidadeDois)
                     bonusCidadesNovas += 1  # Bônus para cidades novas
                 
-                i += 1 + tentativa  # Avança para a próxima cidade (pula as tentativas)
-                cidadeAdd = True
-                break
-        
-        # Se nenhuma cidade pôde ser adicionada, finaliza o dia
-        if not cidadeAdd:
+                i += 1  # Avança para a próxima cidade
+            else:
+                # Se a próxima cidade não cabe, finaliza o dia
+                qtdCidadesVisitadas[idxDiaAtual] = visitasDia  # Registra número de visitas do dia
+                idxDiaAtual += 1                               # Avança para o próximo dia
+                visitasDia = 1                                 # Reinicia contador
+                rotaDia = [cidadeUm]                           # Reinicia rota do dia com a cidade atual
+
+                if idxDiaAtual == totalDias:
+                    break  
+
+                i += 1
+        else:
+            # Se não há mais cidades na rota, finaliza o dia
             qtdCidadesVisitadas[idxDiaAtual] = visitasDia  # Registra número de visitas do dia
             idxDiaAtual += 1                               # Avança para o próximo dia
             visitasDia = 1                                 # Reinicia contador
@@ -201,7 +202,7 @@ def crossover(paiUm, paiDois):
 
 def taxaMutacaoAdaptativa(geracao, geracoes, taxaInicial, taxaFinal):
     # Progressão Linear da taxa de mutação
-    progressao = geracao / (geracoes - 1)  # 0.0 a 1.0
+    progressao = geracao / (geracoes - 1)
     taxaAtual = taxaInicial - (taxaInicial - taxaFinal) * progressao
     
     # Garante que a taxa não seja negativa
@@ -285,7 +286,7 @@ def main():
 
     # Executa o algoritmo genético com parâmetros definidos
     melhorRota, mediaFitnesses, melhorFitnesses = algoritmoGenetico(cities=cities,
-                                                                   tamanhoPop=300,     # 300 indivíduos na população
+                                                                   tamanhoPop=500,     # 500 indivíduos na população
                                                                    geracoes=600,       # 600 gerações
                                                                    taxaMutacao=0.3,    # 30% de chance de mutação
                                                                    tamanhoTorneio=3,   # Tamanho do Torneio
@@ -297,8 +298,7 @@ def main():
     melhorRotaAgrupada = agruparCidades(melhorRota, cities)
     melhorRotaAchatada = [city for day in melhorRotaAgrupada for city in day]  # Achata a lista de cidades visitadas
 
-    totalCidades = len(melhorRotaAchatada)                  # Total de cidades visitadas (com repetições)
-    totalCidadesUnicas = len(np.unique(melhorRotaAchatada)) # Total de cidades únicas visitadas
+    totalCidades = len(melhorRotaAchatada)   # Total de cidades visitadas
 
     print("\n=== ESTATÍSTICAS DAS GERAÇÕES ===")
     tabelaGeracoes = PrettyTable()  # Cria uma tabela para exibir estatísticas das gerações
@@ -312,15 +312,13 @@ def main():
     plt.legend(['Melhor fitness', 'Fitness médio'])
     
     print("\n=== ESTATÍSTICAS DA SOLUÇÃO ===")
-    print(f"Total de cidades visitadas (com repetições): {totalCidades}")
-    print(f"(Essas repetições ocorrem, pois são contabilizadas as mesmas cidades visitadas em dias diferentes: cidade final e cidade inicial de um dia)")
-    print(f"Total de cidades únicas visitadas: {totalCidadesUnicas} de {len(cities)}")
-    print(f"Porcentagem de cobertura: {totalCidadesUnicas/len(cities)*100:.2f}%")
+    print(f"Total de cidades visitadas: {totalCidades}")
+    print(f"Porcentagem de cobertura: {totalCidades/len(cities)*100:.2f}%")
     
     print("\n=== DETALHAMENTO POR DIA ===")
     tabelaDias = PrettyTable()  # Cria uma tabela para exibir detalhes por dia
-    tabelaDias.field_names = ["Dia", "Quantidade total", "Quantidade única", "Cidades"]
-    tabelaDias.add_rows([[i+1, len(dia), len(dia)-1 if i > 0 else len(dia), np.array(dia)] for i, dia in enumerate(melhorRotaAgrupada)])
+    tabelaDias.field_names = ["Dia", "Quantidade total", "Cidades"]
+    tabelaDias.add_rows([[i+1, len(dia), np.array(dia)] for i, dia in enumerate(melhorRotaAgrupada)])
     print(tabelaDias)
     
     # Visualiza a rota encontrada
